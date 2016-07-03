@@ -1,12 +1,23 @@
 var express = require('express');
 var router = express.Router();
 var multer = require('multer');
-var upload = multer({ dest: 'uploads/' });
+var upload = multer({ dest: './public/images' });
 
 var mongo = require('mongodb');
 
 
 var db = require('monk')('localhost/nodeblog');
+
+router.get('/show/:id', function(req, res, next) {
+    var posts = db.get('posts');
+
+    posts.findById(req.params.id, function(err, post){
+      res.render('show', {
+        'post': post
+      });
+    });
+});
+
 
 
 router.get('/add', function(req, res, next) {
@@ -65,8 +76,63 @@ router.post('/add', upload.single('mainimage'), function(req, res, next) {
       }
     });
   }
-
-
 });
+
+
+router.post('/addcomment', function(req, res, next) {
+  //Get Form VAlues
+  var name = req.body.name;
+  var email = req.body.email;
+  var body = req.body.body;
+  var postid = req.body.postid;
+  var commentdate = new Date();
+
+
+  //Form VAlidation
+  req.checkBody('name', 'Name field is required').notEmpty();
+  req.checkBody('email', 'Email field is required, but not displayed').notEmpty();
+  req.checkBody('email', 'Email is not formatted correctly').isEmail();
+  req.checkBody('body', 'Body field is required').notEmpty();
+
+  var errors = req.validationErrors();
+
+  if (errors) {
+    var posts = db.get('posts');
+    posts.findById(postid, function(err, post){
+      res.render('addpost', {
+        "error": errors,
+        "post": post
+      });
+    });
+
+  } else {
+    var comment = {
+      "name": name,
+      "email": email,
+      "body": body,
+      "commentdate": commentdate
+    }
+
+    var posts = db.get('posts');
+    posts.update({
+      "_id": postid
+    }, {
+      $push: {
+        "comments": comment
+      }
+    },function(err, doc){
+      if (err) {
+        throw err;
+      } else {
+        req.flash('success', 'Comment Added');
+        res.location('/posts/show/' +postid);
+        res.redirect('/posts/show/' +postid);
+      }
+    })
+  }
+});
+
+
+
 
 module.exports = router;
